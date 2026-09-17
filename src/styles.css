@@ -1,0 +1,940 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap");
+
+/*
+  Duas cores de sinal, uma por modalidade, porque o app é híbrido:
+  verde = força, âmbar = corrida. Elas voltam no dashboard, nos gráficos
+  e nos cards do feed — não são decoração, são legenda.
+*/
+:root {
+  --papel: #f3f4f0;
+  --papel-alto: #ffffff;
+  --tinta: #171a18;
+  --tinta-fraca: #5e635f;
+  --linha: #dcded7;
+
+  --forca: #24463a;
+  --corrida: #c8891c;
+  --alerta: #9e2b25;
+
+  --raio: 6px;
+  --transicao: 140ms ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: Archivo, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Números de treino são lidos em coluna: alinhamento tabular importa. */
+.numero {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- Tela de entrada ---------- */
+
+.entrada {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 100%;
+}
+
+@media (min-width: 900px) {
+  .entrada {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.entrada__vitrine {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 3rem;
+  background: var(--forca);
+  color: #eef0ec;
+}
+
+@media (min-width: 900px) {
+  .entrada__vitrine {
+    display: flex;
+  }
+}
+
+.marca {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.vitrine__numeros {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.vitrine__medida {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.vitrine__valor {
+  font-size: clamp(3rem, 7vw, 4.5rem);
+  line-height: 1;
+}
+
+.vitrine__valor--corrida {
+  color: #f0c46a;
+}
+
+.vitrine__legenda {
+  font-size: 0.9375rem;
+  color: #b9c2ba;
+}
+
+.vitrine__rodape {
+  max-width: 34ch;
+  font-size: 0.9375rem;
+  color: #b9c2ba;
+}
+
+.entrada__painel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+}
+
+.formulario {
+  width: 100%;
+  max-width: 24rem;
+}
+
+.formulario__titulo {
+  margin: 0 0 0.375rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.formulario__apoio {
+  margin: 0 0 1.75rem;
+  color: var(--tinta-fraca);
+}
+
+.campo {
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.campo__rotulo {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.campo__entrada {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--papel-alto);
+  color: inherit;
+  font: inherit;
+  transition: border-color var(--transicao);
+}
+
+.campo__entrada:focus-visible {
+  outline: 2px solid var(--forca);
+  outline-offset: 1px;
+  border-color: var(--forca);
+}
+
+.campo__ajuda {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--tinta-fraca);
+}
+
+.opcoes {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.opcao {
+  flex: 1;
+}
+
+.opcao input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.opcao span {
+  display: block;
+  padding: 0.5rem 0.25rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--papel-alto);
+  text-align: center;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition:
+    border-color var(--transicao),
+    background var(--transicao);
+}
+
+.opcao input:checked + span {
+  border-color: var(--forca);
+  background: var(--forca);
+  color: #eef0ec;
+}
+
+.opcao input:focus-visible + span {
+  outline: 2px solid var(--forca);
+  outline-offset: 1px;
+}
+
+.botao {
+  width: 100%;
+  padding: 0.6875rem 1rem;
+  border: 1px solid var(--forca);
+  border-radius: var(--raio);
+  background: var(--forca);
+  color: #eef0ec;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transicao);
+}
+
+.botao:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.botao:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.botao:focus-visible {
+  outline: 2px solid var(--tinta);
+  outline-offset: 2px;
+}
+
+.alternar {
+  margin-top: 1.25rem;
+  font-size: 0.9375rem;
+  color: var(--tinta-fraca);
+  text-align: center;
+}
+
+.alternar button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--forca);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.erro {
+  margin-bottom: 1rem;
+  padding: 0.625rem 0.75rem;
+  border-left: 3px solid var(--alerta);
+  background: #f7eae9;
+  color: #6d1f1a;
+  font-size: 0.9375rem;
+}
+
+.carregando {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--tinta-fraca);
+}
+
+/* ---------- Moldura das telas autenticadas ---------- */
+
+.moldura {
+  min-height: 100%;
+}
+
+.cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.875rem 1.5rem;
+  background: var(--forca);
+  color: #eef0ec;
+}
+
+.marca--clara {
+  color: #eef0ec;
+}
+
+.abas {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.aba {
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--raio);
+  color: #b9c2ba;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition:
+    background var(--transicao),
+    color var(--transicao);
+}
+
+.aba:hover {
+  color: #eef0ec;
+}
+
+.aba--ativa {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.aba:focus-visible {
+  outline: 2px solid #f0c46a;
+  outline-offset: 1px;
+}
+
+.cabecalho__conta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-left: 1.5rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.cabecalho__nome {
+  font-size: 0.9375rem;
+  color: #b9c2ba;
+}
+
+.link-sair {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #eef0ec;
+  font: inherit;
+  font-size: 0.9375rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .cabecalho {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .abas {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .cabecalho__conta {
+    margin-left: auto;
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+/* ---------- Página ---------- */
+
+.pagina {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+.pagina__topo {
+  margin-bottom: 1.5rem;
+}
+
+.pagina__titulo {
+  margin: 0 0 0.25rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.pagina__apoio {
+  margin: 0;
+  color: var(--tinta-fraca);
+}
+
+.cartao {
+  margin-bottom: 2.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--papel-alto);
+}
+
+.grade-campos {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 520px) {
+  .grade-campos {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .grade-campos .campo:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.previa {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 1.25rem 0;
+  padding: 0.875rem 1rem;
+  border-radius: var(--raio);
+  background: var(--papel);
+}
+
+.previa__rotulo {
+  font-size: 0.9375rem;
+  color: var(--tinta-fraca);
+}
+
+.previa__valor {
+  font-size: 1.75rem;
+  color: var(--corrida);
+}
+
+.secao__titulo {
+  margin: 0 0 1rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.vazio {
+  padding: 1.5rem 0;
+  color: var(--tinta-fraca);
+}
+
+/* ---------- Lista de corridas ---------- */
+
+.lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.linha {
+  padding: 1rem 0;
+  border-top: 1px solid var(--linha);
+}
+
+.linha:last-child {
+  border-bottom: 1px solid var(--linha);
+}
+
+.linha__principal {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.linha__destaque {
+  font-size: 1.25rem;
+}
+
+.linha__meta {
+  color: var(--tinta-fraca);
+}
+
+.linha__pace {
+  margin-left: auto;
+  font-size: 1.125rem;
+  color: var(--corrida);
+}
+
+.linha__rodape {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--tinta-fraca);
+}
+
+/*
+  A comparação vai para a direita, embaixo do pace: cria duas colunas de
+  leitura — o que você correu à esquerda, o quão rápido foi à direita.
+*/
+.linha__comparativo {
+  margin-left: auto;
+  text-align: right;
+}
+
+@media (max-width: 520px) {
+  .linha__comparativo {
+    margin-left: 0;
+    text-align: left;
+  }
+}
+
+.ganho {
+  color: var(--forca);
+  font-weight: 500;
+}
+
+.perda {
+  color: var(--alerta);
+}
+
+.linha__splits {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta-fraca);
+}
+
+/* ---------- Treino ---------- */
+
+.cartao--ativo {
+  border-color: var(--forca);
+  border-left-width: 3px;
+}
+
+.sessao__topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.sessao__titulo {
+  margin: 0 0 0.125rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.sessao__meta {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--tinta-fraca);
+}
+
+.botao--contorno {
+  width: auto;
+  flex-shrink: 0;
+  background: none;
+  color: var(--forca);
+}
+
+.botao--contorno:hover:not(:disabled) {
+  background: var(--papel);
+  opacity: 1;
+}
+
+.series {
+  margin: 0 0 1.5rem;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--linha);
+}
+
+.serie {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--linha);
+}
+
+.serie__marcar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  cursor: pointer;
+}
+
+.serie__marcar input {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--forca);
+  cursor: pointer;
+}
+
+.serie__marcar input:disabled {
+  cursor: default;
+}
+
+.serie__marcar input:checked + .serie__nome {
+  color: var(--tinta-fraca);
+  text-decoration: line-through;
+}
+
+.serie__indice {
+  color: var(--tinta-fraca);
+  font-size: 0.875rem;
+}
+
+.serie__carga {
+  margin-left: auto;
+  font-size: 0.9375rem;
+}
+
+.adicionar {
+  padding-top: 0.25rem;
+}
+
+.grade-campos--duas {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 520px) {
+  .grade-campos--duas {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .grade-campos--duas .campo:first-child {
+    grid-column: auto;
+  }
+}
+
+select.campo__entrada {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%235e635f' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+.linha__volume {
+  margin-left: auto;
+  font-size: 1.125rem;
+  color: var(--forca);
+}
+
+/* ---------- Cronômetro de descanso ---------- */
+
+.descanso {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--raio);
+  background: var(--papel);
+}
+
+.descanso__rotulo {
+  font-size: 0.9375rem;
+  color: var(--tinta-fraca);
+}
+
+.descanso__valor {
+  font-size: 1.5rem;
+  color: var(--forca);
+}
+
+/* ---------- Treino anterior ---------- */
+
+.treino-anterior__topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.625rem;
+}
+
+.treino-anterior__titulo {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.treino-anterior__data {
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  color: var(--tinta-fraca);
+}
+
+.treino-anterior__vazio,
+.treino-anterior__duracao {
+  margin: 0.625rem 0 0;
+  font-size: 0.875rem;
+  color: var(--tinta-fraca);
+}
+
+.exercicios {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exercicio {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) auto;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+  padding: 0.3125rem 0;
+}
+
+.exercicio__nome {
+  font-size: 0.9375rem;
+}
+
+.exercicio__series {
+  font-size: 0.9375rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.exercicio__separador {
+  margin: 0 0.4375rem;
+  color: var(--linha);
+}
+
+.exercicio__descanso {
+  grid-column: 2;
+  font-size: 0.8125rem;
+  color: var(--tinta-fraca);
+  text-align: right;
+}
+
+@media (max-width: 520px) {
+  .exercicio {
+    grid-template-columns: 1fr;
+  }
+
+  .exercicio__series,
+  .exercicio__descanso {
+    grid-column: 1;
+    text-align: left;
+  }
+}
+
+/* ---------- Dashboard ---------- */
+
+.janelas {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 1rem;
+}
+
+.janela {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--papel-alto);
+  color: var(--tinta-fraca);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition:
+    border-color var(--transicao),
+    color var(--transicao);
+}
+
+.janela:hover {
+  color: var(--tinta);
+}
+
+.janela--ativa {
+  border-color: var(--forca);
+  color: var(--forca);
+  font-weight: 600;
+}
+
+.janela:focus-visible {
+  outline: 2px solid var(--forca);
+  outline-offset: 1px;
+}
+
+.balanco {
+  margin-bottom: 1.5rem;
+}
+
+/*
+  As contagens ficam nas pontas, cada uma na cor da sua modalidade e alinhada
+  com a fatia correspondente da barra. O número descreve o período sem
+  emitir juízo sobre ele.
+*/
+.balanco__contagens {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.625rem;
+}
+
+.contagem {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.contagem--corrida {
+  flex-direction: row-reverse;
+}
+
+.contagem__valor {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.contagem--forca .contagem__valor {
+  color: var(--forca);
+}
+
+.contagem--corrida .contagem__valor {
+  color: var(--corrida);
+}
+
+.contagem__rotulo {
+  font-size: 0.9375rem;
+  color: var(--tinta-fraca);
+}
+
+/*
+  Zero não tem fatia na barra abaixo, então a cor da modalidade deixaria o
+  número solto. Cinza o devolve ao segundo plano, que é onde ele pertence.
+*/
+.contagem--zerada .contagem__valor {
+  color: var(--linha);
+}
+
+.barra {
+  display: flex;
+  height: 0.75rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--linha);
+}
+
+.barra__forca {
+  background: var(--forca);
+}
+
+.barra__corrida {
+  background: var(--corrida);
+}
+
+.paineis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 560px) {
+  .paineis {
+    grid-template-columns: 1fr;
+  }
+}
+
+.painel {
+  padding: 1.25rem;
+  border: 1px solid var(--linha);
+  border-top: 3px solid var(--forca);
+  border-radius: var(--raio);
+  background: var(--papel-alto);
+}
+
+.painel--corrida {
+  border-top-color: var(--corrida);
+}
+
+.painel__titulo {
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--tinta-fraca);
+}
+
+.painel__destaque {
+  margin: 0 0 1rem;
+  font-size: 2.25rem;
+  line-height: 1;
+}
+
+.painel__unidade {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--tinta-fraca);
+}
+
+.detalhes {
+  margin: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--linha);
+}
+
+.detalhes > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.1875rem 0;
+}
+
+.detalhes dt {
+  font-size: 0.875rem;
+  color: var(--tinta-fraca);
+}
+
+.detalhes dd {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.rodape-resumo {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--tinta-fraca);
+}
+
+.convite {
+  margin: 0 0 1.25rem;
+  color: var(--tinta-fraca);
+}
+
+.convite__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.botao--link {
+  width: auto;
+  text-align: center;
+  text-decoration: none;
+}

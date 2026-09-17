@@ -1,0 +1,461 @@
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { ErroDaApi } from "../api/client";
+import {
+  adicionarSerie,
+  buscarTreino,
+  concluirSerie,
+  finalizarTreino,
+  iniciarTreino,
+  listarExercicios,
+  listarTreinos,
+} from "../api/treinos";
+import { useRequisicao } from "../ganchos/useRequisicao";
+import {
+  descreverDuracaoTreino,
+  formatarData,
+  formatarDescanso,
+  segundosEntre,
+} from "../tempo";
+import { agruparPorExercicio, descreverSerie } from "../treino";
+import type { Treino } from "../tipos";
+
+// Guardar o id da sessão aberta sobrevive a um F5 no meio do treino —
+// cenário comum, já que a pessoa fica com o celular na mão entre as séries.
+const CHAVE_SESSAO = "elofit.treinoAberto";
+
+export default function Treinos() {
+  const [treino, setTreino] = useState<Treino | null>(null);
+  const [restaurando, setRestaurando] = useState(
+    () => localStorage.getItem(CHAVE_SESSAO) !== null,
+  );
+
+  const historico = useRequisicao(listarTreinos);
+
+  // Retoma a sessão aberta ao entrar na tela.
+  useEffect(() => {
+    const salvo = localStorage.getItem(CHAVE_SESSAO);
+    if (!salvo) return;
+
+    buscarTreino(Number(salvo))
+      .then(setTreino)
+      .catch(() => localStorage.removeItem(CHAVE_SESSAO))
+      .finally(() => setRestaurando(false));
+  }, []);
+
+  function abrirSessao(nova: Treino) {
+    localStorage.setItem(CHAVE_SESSAO, String(nova.id));
+    setTreino(nova);
+  }
+
+  async function encerrarSessao() {
+    if (!treino) return;
+    await finalizarTreino(treino.id);
+    localStorage.removeItem(CHAVE_SESSAO);
+    setTreino(null);
+    await historico.recarregar();
+  }
+
+  if (restaurando) return <div className="carregando">Carregando...</div>;
+
+  return (
+    <div className="pagina">
+      <header className="pagina__topo">
+        <h1 className="pagina__titulo">Treino</h1>
+        <p className="pagina__apoio">
+          {treino
+            ? "Série a série. Você fecha o treino quando terminar."
+            : "Comece uma sessão para registrar as séries."}
+        </p>
+      </header>
+
+      {treino ? (
+        <SessaoAberta
+          treino={treino}
+          aoAtualizar={setTreino}
+          aoEncerrar={encerrarSessao}
+        />
+      ) : (
+        <NovaSessao aoComecar={abrirSessao} />
+      )}
+
+      <section>
+        <h2 className="secao__titulo">Treinos anteriores</h2>
+
+        {historico.carregando && <p className="vazio">Carregando...</p>}
+        {historico.erro && <p className="erro">{historico.erro}</p>}
+        {historico.dados?.length === 0 && (
+          <p className="vazio">Nenhum treino registrado ainda.</p>
+        )}
+
+        <ul className="lista">
+          {historico.dados
+            ?.filter((t) => t.id !== treino?.id)
+            .map((t) => (
+              <TreinoAnterior treino={t} key={t.id} />
+            ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+/* ---------------- Iniciar ---------------- */
+
+function NovaSessao({ aoComecar }: { aoComecar: (t: Treino) => void }) {
+  const [titulo, setTitulo] = useState("");
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  async function aoEnviar(evento: FormEvent) {
+    evento.preventDefault();
+    setErro(null);
+    setEnviando(true);
+
+    try {
+      aoComecar(await iniciarTreino(titulo.trim()));
+    } catch (problema) {
+      setErro(
+        problema instanceof ErroDaApi
+          ? problema.message
+          : "Não foi possível começar o treino.",
+      );
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <section className="cartao">
+      <form onSubmit={aoEnviar} noValidate>
+        {erro && <p className="erro">{erro}</p>}
+
+        <label className="campo">
+          <span className="campo__rotulo">O que você vai treinar hoje?</span>
+          <input
+            className="campo__entrada"
+            type="text"
+            placeholder="Peito e tríceps"
+            value={titulo}
+            onChange={(e) => setTitulo(e.target.value)}
+          />
+        </label>
+
+        <button
+          className="botao"
+          type="submit"
+          disabled={titulo.trim().length === 0 || enviando}
+        >
+          {enviando ? "Abrindo..." : "Começar treino"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+/* ---------------- Sessão em andamento ---------------- */
+
+function SessaoAberta({
+  treino,
+  aoAtualizar,
+  aoEncerrar,
+}: {
+  treino: Treino;
+  aoAtualizar: (t: Treino) => void;
+  aoEncerrar: () => Promise<void>;
+}) {
+  const catalogo = useRequisicao(() => listarExercicios());
+
+  const [exercicioId, setExercicioId] = useState<number | "">("");
+  const [repeticoes, setRepeticoes] = useState("");
+  const [carga, setCarga] = useState("");
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [encerrando, setEncerrando] = useState(false);
+
+  // Agrupa por grupo muscular para o <select> ficar navegável com 36 itens.
+  const porGrupo = useMemo(() => {
+    const grupos: Record<string, { id: number; nome: string }[]> = {};
+
+    for (const exercicio of catalogo.dados?.content ?? []) {
+      const grupo = exercicio.grupoMuscular ?? "Outros";
+      (grupos[grupo] ??= []).push({ id: exercicio.id, nome: exercicio.nome });
+    }
+    return grupos;
+  }, [catalogo.dados]);
+
+  // A série mais recente da sessão — base do cronômetro de descanso.
+  const ultimaSerieEm = useMemo(() => {
+    const marcados = treino.series
+      .map((s) => s.registradaEm)
+      .filter((valor): valor is string => valor !== null);
+
+    return marcados.length > 0 ? marcados[marcados.length - 1] : null;
+  }, [treino.series]);
+
+  // O backend recebe o número da série; contamos quantas já existem
+  // deste exercício nesta sessão para não pedir isso ao usuário.
+  const proximoNumero = useMemo(() => {
+    if (exercicioId === "") return 1;
+    return (
+      treino.series.filter((s) => s.exercicioId === exercicioId).length + 1
+    );
+  }, [treino.series, exercicioId]);
+
+  async function aoAdicionar(evento: FormEvent) {
+    evento.preventDefault();
+    if (exercicioId === "") return;
+
+    setErro(null);
+    setEnviando(true);
+
+    try {
+      await adicionarSerie(treino.id, {
+        exercicioId: Number(exercicioId),
+        numeroSerie: proximoNumero,
+        repeticoes: Number(repeticoes),
+        cargaKg: carga.trim() ? Number(carga.replace(",", ".")) : undefined,
+      });
+
+      // Recarrega a sessão inteira em vez de emendar a série na lista:
+      // assim o volume total vem calculado pelo backend, sem duas contas
+      // (uma aqui, outra lá) que podem divergir.
+      aoAtualizar(await buscarTreino(treino.id));
+
+      // Exercício e carga ficam: a próxima série quase sempre é do mesmo
+      // movimento com o mesmo peso.
+    } catch (problema) {
+      setErro(
+        problema instanceof ErroDaApi
+          ? problema.message
+          : "Não foi possível adicionar a série.",
+      );
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function alternarConclusao(serieId: number) {
+    try {
+      await concluirSerie(treino.id, serieId);
+      aoAtualizar(await buscarTreino(treino.id));
+    } catch {
+      setErro("Não foi possível marcar a série.");
+    }
+  }
+
+  const podeAdicionar =
+    exercicioId !== "" && Number(repeticoes) > 0 && !enviando;
+
+  return (
+    <>
+      <section className="cartao cartao--ativo">
+        <div className="sessao__topo">
+          <div>
+            <h2 className="sessao__titulo">{treino.titulo}</h2>
+            <p className="sessao__meta">
+              {treino.series.length}{" "}
+              {treino.series.length === 1 ? "série" : "séries"}
+            </p>
+          </div>
+          <button
+            className="botao botao--contorno"
+            onClick={async () => {
+              setEncerrando(true);
+              await aoEncerrar();
+            }}
+            disabled={encerrando}
+          >
+            {encerrando ? "Fechando..." : "Finalizar"}
+          </button>
+        </div>
+
+        {ultimaSerieEm && <DescansoAtual desde={ultimaSerieEm} />}
+
+        {treino.series.length > 0 && (
+          <ul className="series">
+            {treino.series.map((serie) => (
+              <li className="serie" key={serie.id}>
+                <label className="serie__marcar">
+                  <input
+                    type="checkbox"
+                    checked={serie.concluida}
+                    disabled={serie.concluida}
+                    onChange={() => alternarConclusao(serie.id)}
+                  />
+                  <span className="serie__nome">
+                    {serie.exercicioNome}
+                    <span className="serie__indice">
+                      {" "}
+                      série {serie.numeroSerie}
+                    </span>
+                  </span>
+                </label>
+                <span className="numero serie__carga">
+                  {serie.repeticoes}
+                  {serie.cargaKg !== null && ` × ${serie.cargaKg} kg`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form onSubmit={aoAdicionar} className="adicionar" noValidate>
+          {erro && <p className="erro">{erro}</p>}
+
+          {catalogo.erro && <p className="erro">{catalogo.erro}</p>}
+
+          {catalogo.dados?.content.length === 0 && (
+            <p className="vazio">
+              O catálogo de exercícios está vazio. Rode a migration
+              V2__exercicios_iniciais.sql no backend.
+            </p>
+          )}
+
+          <label className="campo">
+            <span className="campo__rotulo">Exercício</span>
+            <select
+              className="campo__entrada"
+              value={exercicioId}
+              onChange={(e) =>
+                setExercicioId(e.target.value === "" ? "" : Number(e.target.value))
+              }
+              disabled={catalogo.carregando}
+            >
+              <option value="">
+                {catalogo.carregando ? "Carregando..." : "Escolha um exercício"}
+              </option>
+              {Object.entries(porGrupo).map(([grupo, exercicios]) => (
+                <optgroup label={grupo} key={grupo}>
+                  {exercicios.map((exercicio) => (
+                    <option value={exercicio.id} key={exercicio.id}>
+                      {exercicio.nome}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+
+          <div className="grade-campos grade-campos--duas">
+            <label className="campo">
+              <span className="campo__rotulo">Repetições</span>
+              <input
+                className="campo__entrada"
+                type="text"
+                inputMode="numeric"
+                placeholder="10"
+                value={repeticoes}
+                onChange={(e) => setRepeticoes(e.target.value)}
+              />
+            </label>
+
+            <label className="campo">
+              <span className="campo__rotulo">Carga (kg)</span>
+              <input
+                className="campo__entrada"
+                type="text"
+                inputMode="decimal"
+                placeholder="60"
+                value={carga}
+                onChange={(e) => setCarga(e.target.value)}
+              />
+              <span className="campo__ajuda">Deixe vazio se for peso do corpo.</span>
+            </label>
+          </div>
+
+          <button className="botao" type="submit" disabled={!podeAdicionar}>
+            {enviando
+              ? "Adicionando..."
+              : `Adicionar série ${proximoNumero}`}
+          </button>
+        </form>
+      </section>
+    </>
+  );
+}
+
+
+/* ---------------- Histórico ---------------- */
+
+/**
+ * Mostra o treino como ele foi feito: exercício por exercício, com as séries
+ * em sequência. É o que a pessoa quer conferir antes de repetir o treino —
+ * quanto levantou da última vez e quanto descansou entre as séries.
+ */
+function TreinoAnterior({ treino }: { treino: Treino }) {
+  const grupos = agruparPorExercicio(treino.series);
+  const duracao = descreverDuracaoTreino(treino.duracaoMinutos);
+
+  return (
+    <li className="linha treino-anterior">
+      <div className="treino-anterior__topo">
+        <span className="treino-anterior__titulo">{treino.titulo}</span>
+        <span className="treino-anterior__data">{formatarData(treino.data)}</span>
+      </div>
+
+      {grupos.length === 0 ? (
+        <p className="treino-anterior__vazio">Nenhuma série registrada.</p>
+      ) : (
+        <ul className="exercicios">
+          {grupos.map((grupo) => (
+            <li className="exercicio" key={grupo.exercicioId}>
+              <span className="exercicio__nome">{grupo.exercicioNome}</span>
+
+              <span className="exercicio__series">
+                {grupo.series.map((serie, indice) => (
+                  <span className="numero" key={serie.id}>
+                    {indice > 0 && <span className="exercicio__separador">·</span>}
+                    {descreverSerie(serie)}
+                  </span>
+                ))}
+              </span>
+
+              {grupo.descansoMedioSegundos !== null && (
+                <span className="exercicio__descanso">
+                  descanso {formatarDescanso(grupo.descansoMedioSegundos)}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {duracao && <p className="treino-anterior__duracao">{duracao}</p>}
+    </li>
+  );
+}
+
+
+/**
+ * Conta o tempo desde a última série registrada.
+ *
+ * Derivamos de um timestamp em vez de incrementar um contador a cada tick:
+ * se a aba ficar em segundo plano, o navegador segura o setInterval e um
+ * contador ficaria atrasado. Com o cálculo por diferença, ao voltar o número
+ * está certo.
+ */
+function DescansoAtual({ desde }: { desde: string }) {
+  const [segundos, setSegundos] = useState(
+    () => segundosEntre(desde, new Date().toISOString()) ?? 0,
+  );
+  const referencia = useRef(desde);
+
+  useEffect(() => {
+    referencia.current = desde;
+    setSegundos(segundosEntre(desde, new Date().toISOString()) ?? 0);
+
+    const intervalo = setInterval(() => {
+      setSegundos(
+        segundosEntre(referencia.current, new Date().toISOString()) ?? 0,
+      );
+    }, 1000);
+
+    return () => clearInterval(intervalo);
+  }, [desde]);
+
+  return (
+    <p className="descanso">
+      <span className="descanso__rotulo">Descansando há</span>
+      <span className="numero descanso__valor">{formatarDescanso(segundos)}</span>
+    </p>
+  );
+}
