@@ -23,11 +23,11 @@ export function apagarToken() {
 
 /** Erro com o status HTTP junto, para a tela decidir o que mostrar. */
 export class ErroDaApi extends Error {
-  constructor(
-    public status: number,
-    mensagem: string,
-  ) {
+  status: number;
+
+  constructor(status: number, mensagem: string) {
     super(mensagem);
+    this.status = status;
   }
 }
 
