@@ -1,13 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { ErroDaApi } from "../api/client";
 import {
   adicionarSerie,
+  alternarConclusao,
   buscarTreino,
-  concluirSerie,
+  editarSerie,
   finalizarTreino,
   iniciarTreino,
   listarExercicios,
   listarTreinos,
+  removerSerie,
 } from "../api/treinos";
 import { useRequisicao } from "../ganchos/useRequisicao";
 import {
@@ -17,7 +26,7 @@ import {
   segundosEntre,
 } from "../tempo";
 import { agruparPorExercicio, descreverSerie } from "../treino";
-import type { Treino } from "../tipos";
+import type { Serie, Treino } from "../tipos";
 
 // Guardar o id da sessão aberta sobrevive a um F5 no meio do treino —
 // cenário comum, já que a pessoa fica com o celular na mão entre as séries.
@@ -233,14 +242,9 @@ function SessaoAberta({
     }
   }
 
-  async function alternarConclusao(serieId: number) {
-    try {
-      await concluirSerie(treino.id, serieId);
-      aoAtualizar(await buscarTreino(treino.id));
-    } catch {
-      setErro("Não foi possível marcar a série.");
-    }
-  }
+  const recarregarSessao = useCallback(async () => {
+    aoAtualizar(await buscarTreino(treino.id));
+  }, [treino.id, aoAtualizar]);
 
   const podeAdicionar =
     exercicioId !== "" && Number(repeticoes) > 0 && !enviando;
@@ -273,27 +277,13 @@ function SessaoAberta({
         {treino.series.length > 0 && (
           <ul className="series">
             {treino.series.map((serie) => (
-              <li className="serie" key={serie.id}>
-                <label className="serie__marcar">
-                  <input
-                    type="checkbox"
-                    checked={serie.concluida}
-                    disabled={serie.concluida}
-                    onChange={() => alternarConclusao(serie.id)}
-                  />
-                  <span className="serie__nome">
-                    {serie.exercicioNome}
-                    <span className="serie__indice">
-                      {" "}
-                      série {serie.numeroSerie}
-                    </span>
-                  </span>
-                </label>
-                <span className="numero serie__carga">
-                  {serie.repeticoes}
-                  {serie.cargaKg !== null && ` × ${serie.cargaKg} kg`}
-                </span>
-              </li>
+              <LinhaDeSerie
+                key={serie.id}
+                serie={serie}
+                treinoId={treino.id}
+                aoMudar={recarregarSessao}
+                aoFalhar={setErro}
+              />
             ))}
           </ul>
         )}
@@ -457,5 +447,158 @@ function DescansoAtual({ desde }: { desde: string }) {
       <span className="descanso__rotulo">Descansando há</span>
       <span className="numero descanso__valor">{formatarDescanso(segundos)}</span>
     </p>
+  );
+}
+
+
+/* ---------------- Série (visualizar e corrigir) ---------------- */
+
+/**
+ * Cada série alterna entre leitura e edição no mesmo lugar.
+ *
+ * Abrir uma tela separada para corrigir um número seria demais para o
+ * contexto: a pessoa está de pé na academia, com o celular numa mão.
+ */
+function LinhaDeSerie({
+  serie,
+  treinoId,
+  aoMudar,
+  aoFalhar,
+}: {
+  serie: Serie;
+  treinoId: number;
+  aoMudar: () => Promise<void>;
+  aoFalhar: (mensagem: string) => void;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [repeticoes, setRepeticoes] = useState(String(serie.repeticoes));
+  const [carga, setCarga] = useState(
+    serie.cargaKg !== null ? String(serie.cargaKg) : "",
+  );
+  const [ocupado, setOcupado] = useState(false);
+
+  function abrirEdicao() {
+    setRepeticoes(String(serie.repeticoes));
+    setCarga(serie.cargaKg !== null ? String(serie.cargaKg) : "");
+    setEditando(true);
+  }
+
+  async function salvar() {
+    const reps = Number(repeticoes);
+    if (!reps || reps <= 0) {
+      aoFalhar("As repetições precisam ser maiores que zero.");
+      return;
+    }
+
+    setOcupado(true);
+    try {
+      await editarSerie(treinoId, serie.id, {
+        repeticoes: reps,
+        cargaKg: carga.trim() ? Number(carga.replace(",", ".")) : undefined,
+      });
+      await aoMudar();
+      setEditando(false);
+    } catch {
+      aoFalhar("Não foi possível salvar a correção.");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function remover() {
+    setOcupado(true);
+    try {
+      await removerSerie(treinoId, serie.id);
+      await aoMudar();
+    } catch {
+      aoFalhar("Não foi possível remover a série.");
+      setOcupado(false);
+    }
+  }
+
+  async function marcar() {
+    setOcupado(true);
+    try {
+      await alternarConclusao(treinoId, serie.id);
+      await aoMudar();
+    } catch {
+      aoFalhar("Não foi possível marcar a série.");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  if (editando) {
+    return (
+      <li className="serie serie--editando">
+        <span className="serie__nome serie__nome--edicao">
+          {serie.exercicioNome}
+          <span className="serie__indice"> série {serie.numeroSerie}</span>
+        </span>
+
+        <div className="serie__campos">
+          <label className="serie__campo">
+            <span>Reps</span>
+            <input
+              className="campo__entrada"
+              type="text"
+              inputMode="numeric"
+              value={repeticoes}
+              onChange={(e) => setRepeticoes(e.target.value)}
+              autoFocus
+            />
+          </label>
+
+          <label className="serie__campo">
+            <span>Carga</span>
+            <input
+              className="campo__entrada"
+              type="text"
+              inputMode="decimal"
+              value={carga}
+              onChange={(e) => setCarga(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="serie__acoes">
+          <button className="acao acao--primaria" onClick={salvar} disabled={ocupado}>
+            Salvar
+          </button>
+          <button className="acao" onClick={() => setEditando(false)} disabled={ocupado}>
+            Cancelar
+          </button>
+          <button className="acao acao--remover" onClick={remover} disabled={ocupado}>
+            Remover
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="serie">
+      <label className="serie__marcar">
+        <input
+          type="checkbox"
+          checked={serie.concluida}
+          onChange={marcar}
+          disabled={ocupado}
+        />
+        <span className="serie__nome">
+          {serie.exercicioNome}
+          <span className="serie__indice"> série {serie.numeroSerie}</span>
+        </span>
+      </label>
+
+      <button
+        className="numero serie__carga serie__carga--editavel"
+        onClick={abrirEdicao}
+        title="Corrigir esta série"
+      >
+        {serie.repeticoes}
+        {serie.cargaKg !== null && ` × ${serie.cargaKg} kg`}
+      </button>
+    </li>
   );
 }

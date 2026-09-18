@@ -25,8 +25,21 @@ export function adicionarSerie(
   return api.post<Serie>(`/api/treinos/${treinoId}/series`, dados);
 }
 
-export function concluirSerie(treinoId: number, serieId: number) {
+/** Alterna entre feita e nao feita. */
+export function alternarConclusao(treinoId: number, serieId: number) {
   return api.patch<Serie>(`/api/treinos/${treinoId}/series/${serieId}/concluir`);
+}
+
+export function editarSerie(
+  treinoId: number,
+  serieId: number,
+  dados: { repeticoes: number; cargaKg?: number },
+) {
+  return api.put<Serie>(`/api/treinos/${treinoId}/series/${serieId}`, dados);
+}
+
+export function removerSerie(treinoId: number, serieId: number) {
+  return api.delete(`/api/treinos/${treinoId}/series/${serieId}`);
 }
 
 export function finalizarTreino(treinoId: number) {

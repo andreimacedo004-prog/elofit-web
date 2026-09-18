@@ -113,4 +113,6 @@ export const api = {
       method: "PATCH",
       body: corpo === undefined ? undefined : JSON.stringify(corpo),
     }),
+
+  delete: (caminho: string) => requisitar<void>(caminho, { method: "DELETE" }),
 };
