@@ -108,3 +108,26 @@ export interface Pagina<T> {
   number: number;
   size: number;
 }
+
+/** RotinaExercicioResponse.java */
+export interface ItemRotina {
+  id: number;
+  exercicioId: number;
+  exercicioNome: string;
+  ordem: number;
+  seriesAlvo: number | null;
+  repeticoesAlvo: number | null;
+  cargaSugeridaKg: number | null;
+}
+
+/** RotinaResponse.java */
+export interface Rotina {
+  id: number;
+  nome: string;
+  descricao: string | null;
+  ativa: boolean;
+  criadoEm: string;
+  exercicios: ItemRotina[];
+  /** true se ja existe algum treino feito a partir dela (nao pode ser excluida de vez, so arquivada). */
+  temHistorico: boolean;
+}

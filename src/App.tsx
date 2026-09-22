@@ -5,6 +5,7 @@ import Entrar from "./paginas/Entrar";
 import Inicio from "./paginas/Inicio";
 import Corridas from "./paginas/Corridas";
 import Treinos from "./paginas/Treinos";
+import Rotinas from "./paginas/Rotinas";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/" element={<Inicio />} />
           <Route path="/corridas" element={<Corridas />} />
           <Route path="/treinos" element={<Treinos />} />
+          <Route path="/rotinas" element={<Rotinas />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

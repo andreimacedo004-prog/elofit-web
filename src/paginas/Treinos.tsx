@@ -6,6 +6,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { Link } from "react-router-dom";
 import { ErroDaApi } from "../api/client";
 import {
   adicionarSerie,
@@ -18,6 +19,7 @@ import {
   listarTreinos,
   removerSerie,
 } from "../api/treinos";
+import { iniciarSessaoDeRotina, listarRotinas } from "../api/rotinas";
 import { useRequisicao } from "../ganchos/useRequisicao";
 import {
   descreverDuracaoTreino,
@@ -37,6 +39,11 @@ export default function Treinos() {
   const [restaurando, setRestaurando] = useState(
     () => localStorage.getItem(CHAVE_SESSAO) !== null,
   );
+  // true só quando a sessão acabou de ser aberta nesta visita — é o que
+  // decide se o cronômetro de descanso pode contar a partir do registro do
+  // backend (uma sessão de rotina nasce com todas as séries já criadas,
+  // então isso não pode valer como "descanso" até a pessoa agir de verdade).
+  const [recemAberta, setRecemAberta] = useState(false);
 
   const historico = useRequisicao(listarTreinos);
 
@@ -53,6 +60,7 @@ export default function Treinos() {
 
   function abrirSessao(nova: Treino) {
     localStorage.setItem(CHAVE_SESSAO, String(nova.id));
+    setRecemAberta(true);
     setTreino(nova);
   }
 
@@ -80,6 +88,7 @@ export default function Treinos() {
       {treino ? (
         <SessaoAberta
           treino={treino}
+          recemAberta={recemAberta}
           aoAtualizar={setTreino}
           aoEncerrar={encerrarSessao}
         />
@@ -111,6 +120,37 @@ export default function Treinos() {
 /* ---------------- Iniciar ---------------- */
 
 function NovaSessao({ aoComecar }: { aoComecar: (t: Treino) => void }) {
+  const [modo, setModo] = useState<"livre" | "rotina">("livre");
+
+  return (
+    <section className="cartao">
+      <div className="janelas" role="group" aria-label="Como começar">
+        <button
+          type="button"
+          className={modo === "livre" ? "janela janela--ativa" : "janela"}
+          onClick={() => setModo("livre")}
+        >
+          Treino livre
+        </button>
+        <button
+          type="button"
+          className={modo === "rotina" ? "janela janela--ativa" : "janela"}
+          onClick={() => setModo("rotina")}
+        >
+          A partir de uma rotina
+        </button>
+      </div>
+
+      {modo === "livre" ? (
+        <ComecarLivre aoComecar={aoComecar} />
+      ) : (
+        <ComecarDeRotina aoComecar={aoComecar} />
+      )}
+    </section>
+  );
+}
+
+function ComecarLivre({ aoComecar }: { aoComecar: (t: Treino) => void }) {
   const [titulo, setTitulo] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -133,30 +173,108 @@ function NovaSessao({ aoComecar }: { aoComecar: (t: Treino) => void }) {
   }
 
   return (
-    <section className="cartao">
-      <form onSubmit={aoEnviar} noValidate>
-        {erro && <p className="erro">{erro}</p>}
+    <form onSubmit={aoEnviar} noValidate>
+      {erro && <p className="erro">{erro}</p>}
 
-        <label className="campo">
-          <span className="campo__rotulo">O que você vai treinar hoje?</span>
-          <input
-            className="campo__entrada"
-            type="text"
-            placeholder="Peito e tríceps"
-            value={titulo}
-            onChange={(e) => setTitulo(e.target.value)}
-          />
-        </label>
+      <label className="campo">
+        <span className="campo__rotulo">O que você vai treinar hoje?</span>
+        <input
+          className="campo__entrada"
+          type="text"
+          placeholder="Peito e tríceps"
+          value={titulo}
+          onChange={(e) => setTitulo(e.target.value)}
+        />
+      </label>
 
-        <button
-          className="botao"
-          type="submit"
-          disabled={titulo.trim().length === 0 || enviando}
+      <button
+        className="botao"
+        type="submit"
+        disabled={titulo.trim().length === 0 || enviando}
+      >
+        {enviando ? "Abrindo..." : "Começar treino"}
+      </button>
+    </form>
+  );
+}
+
+/**
+ * Começa a sessão a partir de uma rotina salva: o backend ja devolve as
+ * series pre-preenchidas com a ultima carga usada, entao aqui so escolhemos
+ * qual rotina e abrimos a sessao.
+ */
+function ComecarDeRotina({ aoComecar }: { aoComecar: (t: Treino) => void }) {
+  const rotinas = useRequisicao(listarRotinas);
+  const [rotinaId, setRotinaId] = useState<number | "">("");
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  async function comecar() {
+    if (rotinaId === "") return;
+    setErro(null);
+    setEnviando(true);
+
+    try {
+      aoComecar(await iniciarSessaoDeRotina(Number(rotinaId)));
+    } catch (problema) {
+      setErro(
+        problema instanceof ErroDaApi
+          ? problema.message
+          : "Não foi possível iniciar a sessão.",
+      );
+      setEnviando(false);
+    }
+  }
+
+  if (rotinas.carregando) return <p className="vazio">Carregando rotinas...</p>;
+  if (rotinas.erro) return <p className="erro">{rotinas.erro}</p>;
+
+  if (rotinas.dados?.length === 0) {
+    return (
+      <div>
+        <p className="vazio">Você ainda não tem nenhuma rotina.</p>
+        <Link className="botao botao--link" to="/rotinas">
+          Criar rotina
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {erro && <p className="erro">{erro}</p>}
+
+      <label className="campo">
+        <span className="campo__rotulo">Rotina</span>
+        <select
+          className="campo__entrada"
+          value={rotinaId}
+          onChange={(e) =>
+            setRotinaId(e.target.value === "" ? "" : Number(e.target.value))
+          }
         >
-          {enviando ? "Abrindo..." : "Começar treino"}
-        </button>
-      </form>
-    </section>
+          <option value="">Escolha uma rotina</option>
+          {rotinas.dados?.map((rotina) => (
+            <option value={rotina.id} key={rotina.id}>
+              {rotina.nome}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <button
+        className="botao"
+        type="button"
+        onClick={comecar}
+        disabled={rotinaId === "" || enviando}
+      >
+        {enviando ? "Abrindo..." : "Começar treino"}
+      </button>
+
+      <Link className="botao botao--link botao--contorno" to="/rotinas">
+        Gerenciar rotinas
+      </Link>
+    </div>
   );
 }
 
@@ -164,10 +282,12 @@ function NovaSessao({ aoComecar }: { aoComecar: (t: Treino) => void }) {
 
 function SessaoAberta({
   treino,
+  recemAberta,
   aoAtualizar,
   aoEncerrar,
 }: {
   treino: Treino;
+  recemAberta: boolean;
   aoAtualizar: (t: Treino) => void;
   aoEncerrar: () => Promise<void>;
 }) {
@@ -179,6 +299,11 @@ function SessaoAberta({
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [encerrando, setEncerrando] = useState(false);
+  // Timestamp local da última ação de verdade (série adicionada ou marcada
+  // como feita). Tem prioridade sobre o registradaEm do backend, que numa
+  // sessão de rotina é só "quando a sessão foi criada", não "quando a
+  // pessoa fez a série".
+  const [ultimaAcaoLocal, setUltimaAcaoLocal] = useState<string | null>(null);
 
   // Agrupa por grupo muscular para o <select> ficar navegável com 36 itens.
   const porGrupo = useMemo(() => {
@@ -191,14 +316,20 @@ function SessaoAberta({
     return grupos;
   }, [catalogo.dados]);
 
-  // A série mais recente da sessão — base do cronômetro de descanso.
-  const ultimaSerieEm = useMemo(() => {
+  // Base do cronômetro de descanso. Uma sessão recém-aberta só ganha um
+  // horário depois de uma ação de verdade (ultimaAcaoLocal); uma sessão
+  // restaurada (F5 no meio do treino) pode confiar no registradaEm que já
+  // veio do backend.
+  const descansoDesde = useMemo(() => {
+    if (ultimaAcaoLocal) return ultimaAcaoLocal;
+    if (recemAberta) return null;
+
     const marcados = treino.series
       .map((s) => s.registradaEm)
       .filter((valor): valor is string => valor !== null);
 
     return marcados.length > 0 ? marcados[marcados.length - 1] : null;
-  }, [treino.series]);
+  }, [treino.series, recemAberta, ultimaAcaoLocal]);
 
   // O backend recebe o número da série; contamos quantas já existem
   // deste exercício nesta sessão para não pedir isso ao usuário.
@@ -228,6 +359,7 @@ function SessaoAberta({
       // assim o volume total vem calculado pelo backend, sem duas contas
       // (uma aqui, outra lá) que podem divergir.
       aoAtualizar(await buscarTreino(treino.id));
+      setUltimaAcaoLocal(new Date().toISOString());
 
       // Exercício e carga ficam: a próxima série quase sempre é do mesmo
       // movimento com o mesmo peso.
@@ -272,7 +404,7 @@ function SessaoAberta({
           </button>
         </div>
 
-        {ultimaSerieEm && <DescansoAtual desde={ultimaSerieEm} />}
+        {descansoDesde && <DescansoAtual desde={descansoDesde} />}
 
         {treino.series.length > 0 && (
           <ul className="series">
@@ -283,6 +415,7 @@ function SessaoAberta({
                 treinoId={treino.id}
                 aoMudar={recarregarSessao}
                 aoFalhar={setErro}
+                aoConcluir={() => setUltimaAcaoLocal(new Date().toISOString())}
               />
             ))}
           </ul>
@@ -464,11 +597,13 @@ function LinhaDeSerie({
   treinoId,
   aoMudar,
   aoFalhar,
+  aoConcluir,
 }: {
   serie: Serie;
   treinoId: number;
   aoMudar: () => Promise<void>;
   aoFalhar: (mensagem: string) => void;
+  aoConcluir: () => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [repeticoes, setRepeticoes] = useState(String(serie.repeticoes));
@@ -519,7 +654,8 @@ function LinhaDeSerie({
   async function marcar() {
     setOcupado(true);
     try {
-      await alternarConclusao(treinoId, serie.id);
+      const atualizada = await alternarConclusao(treinoId, serie.id);
+      if (atualizada.concluida) aoConcluir();
       await aoMudar();
     } catch {
       aoFalhar("Não foi possível marcar a série.");
